@@ -1,5 +1,5 @@
 import streamlit as st
-from google import generativeai as genai
+import google.generativeai as genai 
 import markdown2
 import pdfkit
 import tempfile
