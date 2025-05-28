@@ -1,17 +1,19 @@
 import streamlit as st
-import google.generativeai as genai 
+import google.generativeai as genai
 import markdown2
 import pdfkit
 import tempfile
 
 # === Gemini API Setup ===
-genai.configure(api_key=st.secrets["GEMINI_API_KEY"])  # For Streamlit Cloud
+genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 model = genai.GenerativeModel("gemini-1.5-flash")
 
 # === Streamlit UI Setup ===
 st.set_page_config(page_title="AI Case Study Generator", layout="wide")
+st.image("logo.png", width=180)  # <-- Place your logo file in the same directory
+
 st.title("📚 AI-Powered Case Study Generator")
-st.markdown("Create polished, professional case studies from brief summaries using Gemini 1.5 Flash.")
+st.markdown("Craft sophisticated case studies with tailored formats and creative strategy insights.")
 
 # === Input Form ===
 with st.form("case_form"):
@@ -27,48 +29,75 @@ with st.form("case_form"):
         brief = st.text_area("🧠 Project Brief", height=140, placeholder="What was the problem or objective?")
         results = st.text_area("📈 Outcomes / Achievements", height=140, placeholder="What did the campaign achieve?")
 
-    submitted = st.form_submit_button("🚀 Generate Case Study")
+    submitted = st.form_submit_button("🎯 Recommend Case Study Format")
 
-# === Case Study Generation ===
+# === Step 1: AI Suggests Styles & Creatives ===
 if submitted:
-    if not (project_title and client_name and brief):
-        st.warning("Please fill in at least the project title, client, and brief.")
-    else:
-        with st.spinner("Generating with Gemini..."):
-            prompt = f"""
-You are a strategist and creative copywriter.
-
-Write a structured case study for an advertising/media project using the following details:
+    with st.spinner("Analyzing project to recommend the best strategy..."):
+        strategy_prompt = f"""
+As a senior strategist, suggest the top 3 most suitable case study formats for the following project.
+Also suggest ideal creative assets to pair with the case study type.
 
 Project Title: {project_title}
 Client: {client_name}
 Industry: {industry}
-Brief Summary: {brief}
-Key Results: {results}
+Brief: {brief}
+Results: {results}
 
-Format it with the following sections:
+Return:
+- 3 case study styles (with descriptions)
+- A list of ideal creative assets (videos, carousels, reels, etc.)
+"""
+
+        strategy_response = model.generate_content(strategy_prompt)
+        strategy_text = strategy_response.text.strip()
+
+    st.markdown("### 🎯 AI Recommendations")
+    st.markdown(strategy_text)
+
+    case_study_styles = [s for s in strategy_text.split("\n") if s.strip().startswith("1.") or s.strip().startswith("2.") or s.strip().startswith("3.")]
+    style_options = [s.split(". ", 1)[1] if ". " in s else s for s in case_study_styles]
+
+    selected_style = st.radio("🧩 Choose your preferred case study style:", style_options)
+
+    # === Step 2: Generate Full Case Study ===
+    if st.button("🚀 Generate Final Case Study"):
+        with st.spinner("Crafting a polished, formal case study..."):
+            final_prompt = f"""
+You are a formal and experienced brand strategist.
+
+Generate a professional case study based on the following:
+- Style selected: {selected_style}
+- Project: {project_title}
+- Client: {client_name}
+- Industry: {industry}
+- Brief: {brief}
+- Results: {results}
+
+Use the following sections:
 - Title
 - Problem Statement
-- Strategy / Solution
+- Strategic Approach
 - Implementation
 - Outcomes
 
-Make it professional, polished, and story-driven.
+Keep the tone refined, sophisticated, and presentation-ready.
 """
-            response = model.generate_content(prompt)
-            case_study = response.text.strip()
+
+            case_study = model.generate_content(final_prompt).text.strip()
 
         st.success("✅ Case Study Generated")
-        st.markdown("### 📄 Main Version")
-        st.text_area("Formatted Case Study", case_study, height=350)
+        st.markdown("### 🧾 Final Case Study")
+        st.markdown(case_study, unsafe_allow_html=True)
 
-        # === Alternate Style Versions ===
-        with st.expander("✨ Alternate Style Versions"):
+        # === Alternate Styles ===
+        with st.expander("✨ Alternate Versions"):
             alt_prompt = f"""
-Generate 2 additional versions of the same case study:
-1. A short punchy storytelling version.
-2. A more formal version for investor/client decks.
-Use the same inputs:
+Generate 2 alternate versions of this case study:
+1. A social media storytelling version
+2. A compact pitch-deck version
+
+Inputs:
 Project: {project_title}
 Client: {client_name}
 Industry: {industry}
