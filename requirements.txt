@@ -1,0 +1,4 @@
+streamlit
+google-generativeai
+markdown2
+pdfkit
