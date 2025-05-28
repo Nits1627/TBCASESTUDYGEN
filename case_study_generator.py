@@ -3,6 +3,7 @@ import google.generativeai as genai
 import markdown2
 import pdfkit
 import tempfile
+import re
 
 # === Gemini API Setup ===
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
@@ -10,7 +11,7 @@ model = genai.GenerativeModel("gemini-1.5-flash")
 
 # === Streamlit UI Setup ===
 st.set_page_config(page_title="AI Case Study Generator", layout="wide")
-st.image("logo.png", width=180)  # <-- Place your logo file in the same directory
+st.image("logo.png", width=180)
 
 st.title("📚 AI-Powered Case Study Generator")
 st.markdown("Craft sophisticated case studies with tailored formats and creative strategy insights.")
@@ -36,17 +37,20 @@ if submitted:
     with st.spinner("Analyzing project to recommend the best strategy..."):
         strategy_prompt = f"""
 As a senior strategist, suggest the top 3 most suitable case study formats for the following project.
-Also suggest ideal creative assets to pair with the case study type.
+
+Return only the following:
+
+1. [Style Name] Case Study
+2. [Style Name] Case Study
+3. [Style Name] Case Study
+
+Then list ideal creative asset types that pair well with this project.
 
 Project Title: {project_title}
 Client: {client_name}
 Industry: {industry}
 Brief: {brief}
 Results: {results}
-
-Return:
-- 3 case study styles (with descriptions)
-- A list of ideal creative assets (videos, carousels, reels, etc.)
 """
 
         strategy_response = model.generate_content(strategy_prompt)
@@ -55,10 +59,13 @@ Return:
     st.markdown("### 🎯 AI Recommendations")
     st.markdown(strategy_text)
 
-    case_study_styles = [s for s in strategy_text.split("\n") if s.strip().startswith("1.") or s.strip().startswith("2.") or s.strip().startswith("3.")]
-    style_options = [s.split(". ", 1)[1] if ". " in s else s for s in case_study_styles]
-
-    selected_style = st.radio("🧩 Choose your preferred case study style:", style_options)
+    # === Extract Case Study Style Options ===
+    style_pattern = re.findall(r'\d+\.\s+["“]?(.*?)["”]?\s+Case Study', strategy_text)
+    if style_pattern:
+        selected_style = st.radio("🌟 Choose your preferred case study style:", style_pattern)
+    else:
+        st.error("⚠️ Could not extract styles from AI response. Please rephrase the brief or try again.")
+        st.stop()
 
     # === Step 2: Generate Full Case Study ===
     if st.button("🚀 Generate Final Case Study"):
@@ -66,22 +73,23 @@ Return:
             final_prompt = f"""
 You are a formal and experienced brand strategist.
 
-Generate a professional case study based on the following:
-- Style selected: {selected_style}
-- Project: {project_title}
+Generate a professional case study using the selected style: {selected_style}.
+
+Details:
+- Project Title: {project_title}
 - Client: {client_name}
 - Industry: {industry}
 - Brief: {brief}
 - Results: {results}
 
-Use the following sections:
+Use this structure:
 - Title
 - Problem Statement
 - Strategic Approach
 - Implementation
 - Outcomes
 
-Keep the tone refined, sophisticated, and presentation-ready.
+Tone: polished, formal, and suitable for C-suite or investor review.
 """
 
             case_study = model.generate_content(final_prompt).text.strip()
@@ -103,6 +111,7 @@ Client: {client_name}
 Industry: {industry}
 Brief: {brief}
 Results: {results}
+Style: {selected_style}
 """
             alt_response = model.generate_content(alt_prompt)
             st.markdown(alt_response.text.strip())
