@@ -11,10 +11,10 @@ model = genai.GenerativeModel("gemini-1.5-flash")
 
 # === Streamlit UI Setup ===
 st.set_page_config(page_title="AI Case Study Generator", layout="wide")
-st.image("logo.png", width=180)
+st.image("logo.png", width=180)  # Place logo.png in the same directory
 
 st.title("📚 AI-Powered Case Study Generator")
-st.markdown("Craft sophisticated case studies with tailored formats and creative strategy insights.")
+st.markdown("Craft formal, C-suite-ready case studies with recommended styles and creative assets.")
 
 # === Input Form ===
 with st.form("case_form"):
@@ -30,21 +30,21 @@ with st.form("case_form"):
         brief = st.text_area("🧠 Project Brief", height=140, placeholder="What was the problem or objective?")
         results = st.text_area("📈 Outcomes / Achievements", height=140, placeholder="What did the campaign achieve?")
 
-    submitted = st.form_submit_button("🎯 Recommend Case Study Format")
+    submitted = st.form_submit_button("🎯 Recommend Case Study Formats")
 
-# === Step 1: AI Suggests Styles & Creatives ===
+# === Step 1: Ask Gemini for Style Suggestions ===
 if submitted:
-    with st.spinner("Analyzing project to recommend the best strategy..."):
+    with st.spinner("Getting tailored format recommendations..."):
         strategy_prompt = f"""
-As a senior strategist, suggest the top 3 most suitable case study formats for the following project.
+You're a senior strategist. Recommend the 3 best case study styles and list suitable creative assets.
 
-Return only the following:
+Respond in this format:
 
 1. [Style Name] Case Study
 2. [Style Name] Case Study
 3. [Style Name] Case Study
 
-Then list ideal creative asset types that pair well with this project.
+Then give a bullet list of recommended creative formats (videos, carousels, testimonials, etc.).
 
 Project Title: {project_title}
 Client: {client_name}
@@ -56,31 +56,29 @@ Results: {results}
         strategy_response = model.generate_content(strategy_prompt)
         strategy_text = strategy_response.text.strip()
 
-    st.markdown("### 🎯 AI Recommendations")
+    # === Display AI Output ===
+    st.markdown("### 🤖 AI Recommendations")
     st.markdown(strategy_text)
 
-    # === Extract Case Study Style Options ===
+    # === Extract Case Study Styles ===
     style_pattern = re.findall(r'\d+\.\s+["“]?(.*?)["”]?\s+Case Study', strategy_text)
-    if style_pattern:
-        selected_style = st.radio("🌟 Choose your preferred case study style:", style_pattern)
-    else:
-        st.error("⚠️ Could not extract styles from AI response. Please rephrase the brief or try again.")
+    if not style_pattern:
+        st.error("⚠️ Unable to extract case study styles. Please retry.")
         st.stop()
 
-    # === Step 2: Generate Full Case Study ===
+    selected_style = st.radio("🌟 Choose a preferred case study style:", style_pattern)
+
+    # === Step 2: Generate Final Case Study ===
     if st.button("🚀 Generate Final Case Study"):
-        with st.spinner("Crafting a polished, formal case study..."):
+        with st.spinner("Writing a formal case study..."):
             final_prompt = f"""
-You are a formal and experienced brand strategist.
+Write a complete case study using the selected style: {selected_style}
 
-Generate a professional case study using the selected style: {selected_style}.
-
-Details:
-- Project Title: {project_title}
-- Client: {client_name}
-- Industry: {industry}
-- Brief: {brief}
-- Results: {results}
+Client: {client_name}
+Project: {project_title}
+Industry: {industry}
+Brief: {brief}
+Results: {results}
 
 Use this structure:
 - Title
@@ -89,34 +87,33 @@ Use this structure:
 - Implementation
 - Outcomes
 
-Tone: polished, formal, and suitable for C-suite or investor review.
+Maintain a polished, professional tone suitable for corporate review decks or client pitches.
 """
 
             case_study = model.generate_content(final_prompt).text.strip()
 
         st.success("✅ Case Study Generated")
-        st.markdown("### 🧾 Final Case Study")
+        st.markdown("### 📄 Final Case Study")
         st.markdown(case_study, unsafe_allow_html=True)
 
         # === Alternate Styles ===
-        with st.expander("✨ Alternate Versions"):
+        with st.expander("✨ Alternate Formats"):
             alt_prompt = f"""
-Generate 2 alternate versions of this case study:
-1. A social media storytelling version
-2. A compact pitch-deck version
+Generate 2 alternate versions of the same case study:
+1. A storytelling social media version.
+2. A slide-style version for investor or pitch presentations.
 
-Inputs:
+Style: {selected_style}
 Project: {project_title}
 Client: {client_name}
 Industry: {industry}
 Brief: {brief}
 Results: {results}
-Style: {selected_style}
 """
             alt_response = model.generate_content(alt_prompt)
             st.markdown(alt_response.text.strip())
 
-        # === Export Buttons ===
+        # === Export: Markdown ===
         markdown_output = f"# {project_title}\n\n**Client**: {client_name}\n\n**Industry**: {industry}\n\n**Brief**: {brief}\n\n**Results**: {results}\n\n{case_study}"
 
         st.download_button(
@@ -126,6 +123,7 @@ Style: {selected_style}
             mime="text/markdown"
         )
 
+        # === Export: PDF ===
         def generate_pdf(text):
             html = markdown2.markdown(text)
             with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
