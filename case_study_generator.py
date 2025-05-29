@@ -4,6 +4,7 @@ import markdown2
 import tempfile
 from xhtml2pdf import pisa
 import io
+import re
 
 # === Gemini API Setup ===
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
@@ -69,18 +70,22 @@ if st.session_state.get("project_details"):
     st.markdown("### 🎯 AI Recommendations")
     st.markdown(st.session_state["project_details"]["recommendations"])
 
-    # Extract 3 AI-suggested styles
+    # Extract style names using regex (robust for colon format too)
     lines = st.session_state["project_details"]["recommendations"].split("\n")
-    style_lines = [line.split(". ", 1)[1] for line in lines if line.startswith(("1.", "2.", "3.")) and ". " in line]
+    style_lines = [
+        re.sub(r'^\d+\.\s*', '', line).split(":")[0].strip()
+        for line in lines if re.match(r'^\d+\.\s', line)
+    ]
 
-    # Add "Default Format" manually
     style_options = style_lines + ["Default Format (Structured Parameters)"]
-    selected_style = st.radio("Select a case study style:", style_options, key="style_select")
 
-    if st.button("🚀 Generate Case Study"):
-        with st.spinner("Generating case study..."):
-            if selected_style == "Default Format (Structured Parameters)":
-                final_prompt = f"""
+    if style_options:
+        selected_style = st.radio("Select a case study style:", style_options, key="style_select")
+
+        if st.button("🚀 Generate Case Study"):
+            with st.spinner("Generating case study..."):
+                if selected_style == "Default Format (Structured Parameters)":
+                    final_prompt = f"""
 Create a professional case study in the following format:
 
 Case Study Parameters:
@@ -95,8 +100,8 @@ Industry: {industry}
 Brief: {brief}
 Results: {results}
 """
-            else:
-                final_prompt = f"""
+                else:
+                    final_prompt = f"""
 Create a professional, formal case study using the selected style: {selected_style}
 
 Use this format:
@@ -111,7 +116,9 @@ Industry: {industry}
 Brief: {brief}
 Results: {results}
 """
-            st.session_state.case_study = model.generate_content(final_prompt).text.strip()
+                st.session_state.case_study = model.generate_content(final_prompt).text.strip()
+    else:
+        st.error("❌ No valid case study styles were found in the AI output.")
 
 # === Display Final Case Study ===
 if st.session_state.case_study:
