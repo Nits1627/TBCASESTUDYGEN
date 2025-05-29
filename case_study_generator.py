@@ -30,11 +30,11 @@ with st.form("case_form"):
 
     with col1:
         project_title = st.text_input("📌 Project Title", placeholder="e.g. Hyperlocal Ad Campaign")
-        client_name  = st.text_input("👤 Client",          placeholder="e.g. SipWell Beverages")
-        industry     = st.text_input("🏭 Industry",        placeholder="e.g. FMCG")
+        client_name  = st.text_input("👤 Client", placeholder="e.g. SipWell Beverages")
+        industry     = st.text_input("🏭 Industry", placeholder="e.g. FMCG")
 
     with col2:
-        brief   = st.text_area("🧠 Project Brief",       height=140, placeholder="What was the problem or objective?")
+        brief   = st.text_area("🧠 Project Brief", height=140, placeholder="What was the problem or objective?")
         results = st.text_area("📈 Outcomes / Achievements", height=140, placeholder="What did the campaign achieve?")
 
     submitted = st.form_submit_button("🎯 Recommend Case Study Format")
@@ -71,18 +71,21 @@ if st.session_state.get("project_details"):
     st.markdown("### 🎯 AI Recommendations")
     st.markdown(recs)
 
-    # — robust regex: lines beginning with 1., 2., 3. capture text before colon
+    # — NEW: robust regex + debug output
     style_options = re.findall(r'^\s*\d+\.\s*(.+?)(?::|$)', recs, flags=re.MULTILINE)
-    # append the default structured-parameters option
+    # ALWAYS include default fallback
     style_options.append("Default Format (Structured Parameters)")
 
-    if style_options:
-        selected_style = st.radio("Select a case study style:", style_options, key="style_select")
+    # DEBUG: show exactly what we parsed
+    st.write("🔍 DEBUG — extracted style_options:", style_options)
 
-        if st.button("🚀 Generate Case Study"):
-            with st.spinner("Generating case study..."):
-                if selected_style == "Default Format (Structured Parameters)":
-                    final_prompt = f"""
+    # render the radio
+    selected_style = st.radio("Select a case study style:", style_options, key="style_select")
+
+    if st.button("🚀 Generate Case Study"):
+        with st.spinner("Generating case study..."):
+            if selected_style == "Default Format (Structured Parameters)":
+                final_prompt = f"""
 Create a professional case study in the following format:
 
 Case Study Parameters:
@@ -97,8 +100,8 @@ Industry: {industry}
 Brief: {brief}
 Results: {results}
 """
-                else:
-                    final_prompt = f"""
+            else:
+                final_prompt = f"""
 Create a professional, formal case study using the selected style: {selected_style}
 
 Use this format:
@@ -113,9 +116,7 @@ Industry: {industry}
 Brief: {brief}
 Results: {results}
 """
-                st.session_state.case_study = model.generate_content(final_prompt).text.strip()
-    else:
-        st.error("❌ No valid case study styles found. Please retry with a different brief.")
+            st.session_state.case_study = model.generate_content(final_prompt).text.strip()
 
 # === Display Final Case Study ===
 if st.session_state.case_study:
