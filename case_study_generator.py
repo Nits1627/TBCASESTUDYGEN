@@ -1,8 +1,9 @@
 import streamlit as st
 import google.generativeai as genai
 import markdown2
-import pdfkit
 import tempfile
+from xhtml2pdf import pisa
+import io
 import re
 
 # === Gemini API Setup ===
@@ -118,16 +119,15 @@ Maintain the same format and keep it formal.
             st.markdown(st.session_state.case_study, unsafe_allow_html=True)
 
     # === Export Buttons ===
-    markdown_output = markdown2.markdown(st.session_state.case_study)
-
     st.download_button("📝 Download as Markdown", st.session_state.case_study, f"{project_title}.md", "text/markdown")
 
-    def generate_pdf(text):
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-            pdfkit.from_string(markdown2.markdown(text), tmp_file.name)
-            return tmp_file.name
+    # PDF Export using xhtml2pdf
+    def generate_pdf(content):
+        html = markdown2.markdown(content)
+        result = io.BytesIO()
+        pisa.CreatePDF(io.StringIO(html), dest=result)
+        return result
 
     if st.button("📄 Generate PDF"):
-        pdf_path = generate_pdf(st.session_state.case_study)
-        with open(pdf_path, "rb") as file:
-            st.download_button("💾 Download PDF", file, f"{project_title}.pdf", "application/pdf")
+        pdf_data = generate_pdf(st.session_state.case_study)
+        st.download_button("💾 Download PDF", data=pdf_data.getvalue(), file_name=f"{project_title}.pdf", mime="application/pdf")
