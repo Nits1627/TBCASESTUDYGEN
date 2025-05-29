@@ -16,35 +16,28 @@ st.image("logo.png", width=180)
 st.title("📚 AI-Powered Case Study Generator")
 st.markdown("Craft sophisticated case studies with tailored formats and creative strategy insights.")
 
-# === Form to Collect Inputs ===
-if "style_options" not in st.session_state:
-    st.session_state.style_options = None
-if "strategy_text" not in st.session_state:
-    st.session_state.strategy_text = ""
-if "selected_style" not in st.session_state:
-    st.session_state.selected_style = ""
-
+# === Input Form ===
 with st.form("case_form"):
     st.subheader("📝 Enter Case Study Details")
     col1, col2 = st.columns(2)
 
     with col1:
-        project_title = st.text_input("📌 Project Title", placeholder="e.g. Hyperlocal Ad Campaign")
+        project_title = st.text_input("📌 Project Title", placeholder="e.g. Hyperlocal Ad Campaign for Beverage Brand")
         client_name = st.text_input("👤 Client", placeholder="e.g. SipWell Beverages")
         industry = st.text_input("🏭 Industry", placeholder="e.g. FMCG / Food & Beverage")
 
     with col2:
-        brief = st.text_area("🧠 Project Brief", height=140, placeholder="Describe the campaign objective.")
-        results = st.text_area("📈 Outcomes / Achievements", height=140, placeholder="Highlight the results.")
+        brief = st.text_area("🧠 Project Brief", height=140, placeholder="What was the problem or objective?")
+        results = st.text_area("📈 Outcomes / Achievements", height=140, placeholder="What did the campaign achieve?")
 
     submitted = st.form_submit_button("🎯 Recommend Case Study Format")
 
-# === Phase 1: Recommend Case Study Style ===
+# === Step 1: AI Suggests Styles & Creatives ===
 if submitted:
-    with st.spinner("🔍 Analyzing project to recommend best strategy..."):
+    with st.spinner("Analyzing project to recommend the best strategy..."):
         strategy_prompt = f"""
 As a senior strategist, suggest the top 3 most suitable case study formats for the following project.
-Also suggest creative asset types that go well with this project (like videos, reels, carousels).
+Also suggest ideal creative assets to pair with the case study type.
 
 Project Title: {project_title}
 Client: {client_name}
@@ -52,35 +45,29 @@ Industry: {industry}
 Brief: {brief}
 Results: {results}
 
-Return only the following:
-1. [Style Name] Case Study
-2. [Style Name] Case Study
-3. [Style Name] Case Study
-Creative Assets: [List of recommended asset types]
+Return:
+- 3 case study styles (with descriptions)
+- A list of ideal creative assets (videos, carousels, reels, etc.)
 """
 
-        response = model.generate_content(strategy_prompt)
-        strategy_text = response.text.strip()
+        strategy_response = model.generate_content(strategy_prompt)
+        strategy_text = strategy_response.text.strip()
 
-        # Save to session
-        st.session_state.strategy_text = strategy_text
-        st.session_state.style_options = re.findall(r'\d+\.\s+["“]?(.*?)["”]?\s+Case Study', strategy_text)
-
-# === Phase 2: Display Options and Proceed ===
-if st.session_state.style_options:
     st.markdown("### 🎯 AI Recommendations")
-    st.markdown(st.session_state.strategy_text)
+    st.markdown(strategy_text)
 
-    st.session_state.selected_style = st.radio(
-        "🌟 Choose your preferred case study style:", st.session_state.style_options
-    )
+    case_study_styles = [s for s in strategy_text.split("\n") if s.strip().startswith("1.") or s.strip().startswith("2.") or s.strip().startswith("3.")]
+    style_options = [s.split(". ", 1)[1] if ". " in s else s for s in case_study_styles]
 
+    selected_style = st.radio("🧩 Choose your preferred case study style:", style_options)
+
+    # === Step 2: Generate Full Case Study ===
     if st.button("🚀 Generate Final Case Study"):
-        with st.spinner("📚 Crafting a polished, formal case study..."):
+        with st.spinner("Crafting a polished, formal case study..."):
             final_prompt = f"""
 You are a formal and experienced brand strategist.
 
-Generate a professional case study using the selected style: {st.session_state.selected_style}.
+Generate a professional case study using the selected style: {selected_style}.
 
 Details:
 - Project Title: {project_title}
@@ -89,34 +76,60 @@ Details:
 - Brief: {brief}
 - Results: {results}
 
-Structure:
-- Title
-- Problem Statement
-- Strategic Approach
-- Implementation
-- Outcomes
+Use this exact format:
+Case Study Parameters:
 
-Tone: polished, formal, and suitable for C-suite or investor review.
+Client Name / Brand Name: {client_name}
+Problem Statement / Task:
+Business Objective:
+Solution:
+Key Results:
+
+Fill in the rest appropriately using the given inputs. Tone: highly formal and professional.
 """
+
             case_study = model.generate_content(final_prompt).text.strip()
 
         st.success("✅ Case Study Generated")
         st.markdown("### 🧾 Final Case Study")
         st.markdown(case_study, unsafe_allow_html=True)
 
-        # === Alternate Versions ===
+        # === Re-prompt Option ===
+        reprompt = st.text_area("✏️ Want to tweak or revise this? Enter a reprompt:")
+        if st.button("🔁 Regenerate with Tweaks"):
+            with st.spinner("Revising based on your feedback..."):
+                revision_prompt = f"""
+Revise the following case study based on this user feedback: {reprompt}
+
+Original Case Study:
+{case_study}
+
+Make sure to keep the format and tone consistent.
+"""
+                revised = model.generate_content(revision_prompt).text.strip()
+                st.markdown("### 🔄 Revised Case Study")
+                st.markdown(revised, unsafe_allow_html=True)
+                case_study = revised  # Update for export
+
+        # === Alternate Styles ===
         with st.expander("✨ Alternate Versions"):
             alt_prompt = f"""
 Generate 2 alternate versions of this case study:
-1. A storytelling version for social media
-2. A concise version for pitch decks
+1. A social media storytelling version
+2. A compact pitch-deck version
 
-Style: {st.session_state.selected_style}
+Inputs:
+Project: {project_title}
+Client: {client_name}
+Industry: {industry}
+Brief: {brief}
+Results: {results}
+Style: {selected_style}
 """
             alt_response = model.generate_content(alt_prompt)
             st.markdown(alt_response.text.strip())
 
-        # === Export Options ===
+        # === Export Buttons ===
         markdown_output = f"# {project_title}\n\n**Client**: {client_name}\n\n**Industry**: {industry}\n\n**Brief**: {brief}\n\n**Results**: {results}\n\n{case_study}"
 
         st.download_button(
