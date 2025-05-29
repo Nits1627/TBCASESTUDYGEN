@@ -4,7 +4,6 @@ import markdown2
 import tempfile
 from xhtml2pdf import pisa
 import io
-import re
 
 # === Gemini API Setup ===
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
@@ -70,15 +69,16 @@ if st.session_state.get("project_details"):
     st.markdown("### 🎯 AI Recommendations")
     st.markdown(st.session_state["project_details"]["recommendations"])
 
-    # Extract style options
-    style_lines = [line for line in st.session_state["project_details"]["recommendations"].split("\n") if line.startswith(("1.", "2.", "3."))]
-    style_options = [line.split(". ", 1)[1] if ". " in line else line for line in style_lines]
-    style_options.append("Default Format (Structured Parameters)")
+    # Extract 3 AI-suggested styles
+    lines = st.session_state["project_details"]["recommendations"].split("\n")
+    style_lines = [line.split(". ", 1)[1] for line in lines if line.startswith(("1.", "2.", "3.")) and ". " in line]
 
+    # Add "Default Format" manually
+    style_options = style_lines + ["Default Format (Structured Parameters)"]
     selected_style = st.radio("Select a case study style:", style_options, key="style_select")
 
     if st.button("🚀 Generate Case Study"):
-        with st.spinner("Generating formal case study..."):
+        with st.spinner("Generating case study..."):
             if selected_style == "Default Format (Structured Parameters)":
                 final_prompt = f"""
 Create a professional case study in the following format:
@@ -113,25 +113,25 @@ Results: {results}
 """
             st.session_state.case_study = model.generate_content(final_prompt).text.strip()
 
-# === Display Generated Case Study ===
+# === Display Final Case Study ===
 if st.session_state.case_study:
     st.success("✅ Case Study Generated")
     st.markdown("### 📄 Final Case Study")
     st.markdown(st.session_state.case_study, unsafe_allow_html=True)
 
-    # === Reprompt UI ===
-    reprompt_text = st.text_area("🔁 Want to make edits or give feedback?", placeholder="e.g. Make it shorter, use more data, make tone friendlier...")
+    # === Reprompt for Feedback ===
+    feedback = st.text_area("🔁 Want to make edits or give feedback?", placeholder="e.g. Make it shorter, change the tone, add results")
     if st.button("♻️ Regenerate with Edits"):
         with st.spinner("Regenerating based on your feedback..."):
-            revised_prompt = f"""
-Revise the following case study according to this feedback: {reprompt_text}
+            revise_prompt = f"""
+Revise the following case study according to this feedback: {feedback}
 
 Original Case Study:
 {st.session_state.case_study}
 
 Maintain the same format and keep it formal.
 """
-            st.session_state.case_study = model.generate_content(revised_prompt).text.strip()
+            st.session_state.case_study = model.generate_content(revise_prompt).text.strip()
             st.markdown("### ✨ Revised Case Study")
             st.markdown(st.session_state.case_study, unsafe_allow_html=True)
 
@@ -145,5 +145,5 @@ Maintain the same format and keep it formal.
         return result
 
     if st.button("📄 Generate PDF"):
-        pdf_data = generate_pdf(st.session_state.case_study)
-        st.download_button("💾 Download PDF", data=pdf_data.getvalue(), file_name=f"{project_title}.pdf", mime="application/pdf")
+        pdf = generate_pdf(st.session_state.case_study)
+        st.download_button("💾 Download PDF", data=pdf.getvalue(), file_name=f"{project_title}.pdf", mime="application/pdf")
