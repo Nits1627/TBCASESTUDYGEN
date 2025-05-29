@@ -30,11 +30,11 @@ with st.form("case_form"):
 
     with col1:
         project_title = st.text_input("📌 Project Title", placeholder="e.g. Hyperlocal Ad Campaign")
-        client_name = st.text_input("👤 Client", placeholder="e.g. SipWell Beverages")
-        industry = st.text_input("🏭 Industry", placeholder="e.g. FMCG")
+        client_name  = st.text_input("👤 Client",          placeholder="e.g. SipWell Beverages")
+        industry     = st.text_input("🏭 Industry",        placeholder="e.g. FMCG")
 
     with col2:
-        brief = st.text_area("🧠 Project Brief", height=140, placeholder="What was the problem or objective?")
+        brief   = st.text_area("🧠 Project Brief",       height=140, placeholder="What was the problem or objective?")
         results = st.text_area("📈 Outcomes / Achievements", height=140, placeholder="What did the campaign achieve?")
 
     submitted = st.form_submit_button("🎯 Recommend Case Study Format")
@@ -55,29 +55,26 @@ Return:
 - 3 case study styles (with short descriptions)
 - Ideal creative formats (reels, carousels, motion graphics, etc.)
 """
-        response = model.generate_content(strategy_prompt).text.strip()
+        recommendations = model.generate_content(strategy_prompt).text.strip()
         st.session_state.project_details = {
             "project_title": project_title,
             "client_name": client_name,
             "industry": industry,
             "brief": brief,
             "results": results,
-            "recommendations": response
+            "recommendations": recommendations
         }
 
 # === Display Style Options ===
 if st.session_state.get("project_details"):
+    recs = st.session_state["project_details"]["recommendations"]
     st.markdown("### 🎯 AI Recommendations")
-    st.markdown(st.session_state["project_details"]["recommendations"])
+    st.markdown(recs)
 
-    # Extract style names using regex (robust for colon format too)
-    lines = st.session_state["project_details"]["recommendations"].split("\n")
-    style_lines = [
-        re.sub(r'^\d+\.\s*', '', line).split(":")[0].strip()
-        for line in lines if re.match(r'^\d+\.\s', line)
-    ]
-
-    style_options = style_lines + ["Default Format (Structured Parameters)"]
+    # — robust regex: lines beginning with 1., 2., 3. capture text before colon
+    style_options = re.findall(r'^\s*\d+\.\s*(.+?)(?::|$)', recs, flags=re.MULTILINE)
+    # append the default structured-parameters option
+    style_options.append("Default Format (Structured Parameters)")
 
     if style_options:
         selected_style = st.radio("Select a case study style:", style_options, key="style_select")
@@ -118,7 +115,7 @@ Results: {results}
 """
                 st.session_state.case_study = model.generate_content(final_prompt).text.strip()
     else:
-        st.error("❌ No valid case study styles were found in the AI output.")
+        st.error("❌ No valid case study styles found. Please retry with a different brief.")
 
 # === Display Final Case Study ===
 if st.session_state.case_study:
@@ -127,7 +124,10 @@ if st.session_state.case_study:
     st.markdown(st.session_state.case_study, unsafe_allow_html=True)
 
     # === Reprompt for Feedback ===
-    feedback = st.text_area("🔁 Want to make edits or give feedback?", placeholder="e.g. Make it shorter, change the tone, add results")
+    feedback = st.text_area(
+        "🔁 Want to make edits or give feedback?",
+        placeholder="e.g. Make it shorter, change the tone, add results"
+    )
     if st.button("♻️ Regenerate with Edits"):
         with st.spinner("Regenerating based on your feedback..."):
             revise_prompt = f"""
@@ -143,7 +143,12 @@ Maintain the same format and keep it formal.
             st.markdown(st.session_state.case_study, unsafe_allow_html=True)
 
     # === Export Buttons ===
-    st.download_button("📝 Download as Markdown", st.session_state.case_study, f"{project_title}.md", "text/markdown")
+    st.download_button(
+        "📝 Download as Markdown",
+        st.session_state.case_study,
+        f"{project_title}.md",
+        "text/markdown"
+    )
 
     def generate_pdf(content):
         html = markdown2.markdown(content)
@@ -153,4 +158,9 @@ Maintain the same format and keep it formal.
 
     if st.button("📄 Generate PDF"):
         pdf = generate_pdf(st.session_state.case_study)
-        st.download_button("💾 Download PDF", data=pdf.getvalue(), file_name=f"{project_title}.pdf", mime="application/pdf")
+        st.download_button(
+            "💾 Download PDF",
+            data=pdf.getvalue(),
+            file_name=f"{project_title}.pdf",
+            mime="application/pdf"
+        )
