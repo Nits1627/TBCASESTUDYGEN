@@ -1,8 +1,9 @@
 import streamlit as st
 import google.generativeai as genai
 import markdown2
-import pdfkit
 import tempfile
+from xhtml2pdf import pisa
+import io
 import re
 
 # === Gemini API Setup ===
@@ -72,12 +73,30 @@ if st.session_state.get("project_details"):
     # Extract style options
     style_lines = [line for line in st.session_state["project_details"]["recommendations"].split("\n") if line.startswith(("1.", "2.", "3."))]
     style_options = [line.split(". ", 1)[1] if ". " in line else line for line in style_lines]
+    style_options.append("Default Format (Structured Parameters)")
 
     selected_style = st.radio("Select a case study style:", style_options, key="style_select")
 
     if st.button("🚀 Generate Case Study"):
         with st.spinner("Generating formal case study..."):
-            final_prompt = f"""
+            if selected_style == "Default Format (Structured Parameters)":
+                final_prompt = f"""
+Create a professional case study in the following format:
+
+Case Study Parameters:
+Client Name / Brand Name: {client_name}
+Problem Statement / Task:
+Business Objective:
+Solution:
+Key Results:
+
+Project Title: {project_title}
+Industry: {industry}
+Brief: {brief}
+Results: {results}
+"""
+            else:
+                final_prompt = f"""
 Create a professional, formal case study using the selected style: {selected_style}
 
 Use this format:
@@ -92,7 +111,6 @@ Industry: {industry}
 Brief: {brief}
 Results: {results}
 """
-
             st.session_state.case_study = model.generate_content(final_prompt).text.strip()
 
 # === Display Generated Case Study ===
@@ -118,16 +136,14 @@ Maintain the same format and keep it formal.
             st.markdown(st.session_state.case_study, unsafe_allow_html=True)
 
     # === Export Buttons ===
-    markdown_output = markdown2.markdown(st.session_state.case_study)
-
     st.download_button("📝 Download as Markdown", st.session_state.case_study, f"{project_title}.md", "text/markdown")
 
-    def generate_pdf(text):
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-            pdfkit.from_string(markdown2.markdown(text), tmp_file.name)
-            return tmp_file.name
+    def generate_pdf(content):
+        html = markdown2.markdown(content)
+        result = io.BytesIO()
+        pisa.CreatePDF(io.StringIO(html), dest=result)
+        return result
 
     if st.button("📄 Generate PDF"):
-        pdf_path = generate_pdf(st.session_state.case_study)
-        with open(pdf_path, "rb") as file:
-            st.download_button("💾 Download PDF", file, f"{project_title}.pdf", "application/pdf")
+        pdf_data = generate_pdf(st.session_state.case_study)
+        st.download_button("💾 Download PDF", data=pdf_data.getvalue(), file_name=f"{project_title}.pdf", mime="application/pdf")
