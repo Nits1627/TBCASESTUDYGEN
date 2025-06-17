@@ -2,3 +2,5 @@ streamlit
 google-generativeai
 markdown2
 xhtml2pdf
+beautifulsoup4
+requests
