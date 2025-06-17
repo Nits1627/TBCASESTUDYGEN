@@ -33,23 +33,58 @@ def fetch_comprehensive_campaign_data(query, num_results=10):
     try:
         res = requests.post(SERPER_API_URL, headers=headers, json=payload, timeout=20)
         data = res.json()
-        snippets = [r.get('snippet','') for r in data.get('organic',[])]
-        return "\n".join(snippets[:8])
-    except Exception:
-        return ''
+        snippets = []
+        
+        # Extract snippets from organic results
+        for r in data.get('organic',[]):
+            snippet = r.get('snippet','')
+            title = r.get('title','')
+            link = r.get('link','')
+            snippets.append(f"SOURCE: {title} ({link})\nCONTENT: {snippet}")
+            
+        # Also check for news results which often contain recent campaign data
+        for r in data.get('news',[]):
+            snippet = r.get('snippet','')
+            title = r.get('title','')
+            link = r.get('link','')
+            date = r.get('date','')
+            snippets.append(f"NEWS SOURCE: {title} ({date}) ({link})\nCONTENT: {snippet}")
+            
+        return "\n\n".join(snippets[:num_results])
+    except Exception as e:
+        return f'Error fetching data: {str(e)}'
 
 def extract_before_after_metrics(text, client, campaign):
     prompt = f"""
-Extract numeric BEFORE and AFTER metrics for {client}'s "{campaign}" campaign in JSON format: {{"MetricName":{{"before":val,"after":val}},...}}\nText:\n{text[:2000]}
+Extract detailed numeric BEFORE and AFTER metrics for {client}'s "{campaign}" campaign in JSON format: {{"MetricName":{{"before":val,"after":val,"percent_change":val,"unit":"unit"}},...}}
+
+Analyze the text thoroughly to find all possible metrics. For each metric:
+1. Extract precise numeric values (before and after the campaign)
+2. Calculate the percent change
+3. Include the unit of measurement (%, $, users, etc.)
+4. Ensure values are specific to this exact campaign, not general company metrics
+
+Text:\n{text[:3000]}
 """
     return model.generate_content(prompt).text.strip()
 
 def fetch_industry_benchmarks(industry, metrics):
     output = {}
     for m in metrics:
-        query = f"{industry} industry average {m} benchmark 2024"
-        snippets = fetch_comprehensive_campaign_data(query, 8)
-        prompt = f"Extract average {m} benchmark for {industry} from:\n{snippets[:2000]}"
+        query = f"{industry} industry average {m} benchmark 2024 statistics"
+        snippets = fetch_comprehensive_campaign_data(query, 10)
+        prompt = f"""Extract detailed {m} benchmarks for {industry} industry from the text below.
+        
+Provide in JSON format with these fields:
+- average: The industry average value
+- top_performers: Value for top 10% in industry
+- range: Typical range (min-max)
+- unit: Unit of measurement
+- source: Likely source of this data
+- year: Most recent year this data represents
+
+Text:\n{snippets[:2500]}
+"""
         output[m] = model.generate_content(prompt).text.strip()
         time.sleep(0.5)
     return output
@@ -57,14 +92,36 @@ def fetch_industry_benchmarks(industry, metrics):
 def verify_campaign_facts(client, campaign, metrics_json):
     queries = [
         f'"{client}" "{campaign}" official results press release',
-        f'"{client}" "{campaign}" case study marketing agency'
+        f'"{client}" "{campaign}" case study marketing agency',
+        f'"{client}" "{campaign}" performance data',
+        f'"{client}" "{campaign}" ROI statistics',
+        f'"{client}" annual report "{campaign}"'
     ]
     combined = ''
     for q in queries:
-        combined += fetch_comprehensive_campaign_data(q,5) + "\n"
+        combined += fetch_comprehensive_campaign_data(q,6) + "\n"
         time.sleep(0.5)
     prompt = f"""
-Verify these metrics for {client}'s "{campaign}" campaign.\nMetrics:\n{metrics_json}\nSources:\n{combined[:2000]}\nProvide a JSON mapping each metric to verified:true/false and credibility score.\n"""
+Verify these metrics for {client}'s "{campaign}" campaign with extreme precision.
+
+Metrics:\n{metrics_json}\n
+Sources:\n{combined[:3000]}\n
+Provide a detailed JSON with:
+1. Each metric mapped to:
+   - verified: true/false
+   - credibility_score: 0-100
+   - confidence_level: "high", "medium", or "low"
+   - supporting_evidence: Direct quotes or references from sources
+   - contradicting_evidence: Any conflicting information found
+   - suggested_adjustment: If metric seems inaccurate, suggest corrected value
+
+2. Overall assessment:
+   - overall_reliability: 0-100 score
+   - potential_biases: Any marketing exaggerations detected
+   - missing_context: Important context that might be missing
+
+Be extremely critical and thorough in your verification.
+"""
     return model.generate_content(prompt).text.strip()
 
 # === Input Form ===
@@ -121,14 +178,28 @@ if st.session_state.selected_style:
     if st.button('🚀 Generate Case Study'):
         with st.spinner('🛠️ Building your case study...'):
             prompt = f"""
-Create a {st.session_state.selected_style} case study for {client_name}'s "{campaign_name}" campaign in {industry}.
-Include:
+Create a highly detailed, data-driven {st.session_state.selected_style} case study for {client_name}'s "{campaign_name}" campaign in {industry}.
+
+Use this information:
 - Brief: {brief}
 - Achievements: {achievements}
 - Metrics: {st.session_state.raw_metrics}
 - Benchmarks: {st.session_state.benchmarks}
 - Fact Verification: {st.session_state.verified}
-Format as markdown with clear sections and tables for numeric data.
+
+Requirements:
+1. Focus EXCLUSIVELY on this specific campaign with accurate, verified metrics
+2. Include precise numeric data with proper units (%, $, etc.) and time periods
+3. Compare campaign performance against industry benchmarks with specific percentages
+4. Analyze ROI and cost-effectiveness with concrete numbers
+5. Include a "Methodology" section explaining how results were measured
+6. Add a "Key Learnings" section with actionable insights
+7. Create data visualizations described in markdown (tables, charts)
+8. Cite specific timeframes for all metrics (e.g., "In Q2 2023..." not "Recently...")
+9. Maintain factual accuracy - only include claims supported by the verified data
+10. Tailor the content specifically to {industry} industry standards and expectations
+
+Format as professional markdown with clear sections, subsections, and tables for numeric data.
 """
             result = model.generate_content(prompt).text.strip()
             st.session_state.case_study = result
