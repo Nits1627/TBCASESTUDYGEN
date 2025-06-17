@@ -87,15 +87,18 @@ Timeframe: {timeframe}
 Brief: {brief}
 Achievements: {achievements}
 
-Structure your case study with these sections and include real numbers and metrics, quoting sources where possible:
+Structure your case study with these sections and include only factual data scraped from the provided content:
 
 1. Background & Objectives
 2. Strategic Approach
 3. Creative Execution
-4. Results & Impact (include factual data: reach, engagement rate, ROI, sales uplift)
+4. Results & Impact
+   - Include metrics on brand awareness lift and reach (if these metrics are present in the source content).  
+   - Also include additional success metrics (engagement rate, ROI, sales uplift) with real numbers.  
+   - If a particular metric is not available, omit it quietly without noting its absence.
 5. Key Learnings & Future Recommendations
 
-Use only the provided content below to extract data. Do not invent figures.
+Ensure each section is richly detailed, uses real numeric figures, and includes verified quotes where applicable.
 
 Content:
 {st.session_state.all_text}
@@ -118,4 +121,4 @@ if st.session_state.case_study:
     if st.button('♻️ Regenerate with Feedback'):
         rev = f"Revise the case study below based on this feedback: {feedback}\n\nOriginal:\n{st.session_state.case_study}"
         st.session_state.case_study = model.generate_content(rev).text.strip()
-        st.experimental_rerun()
+        
