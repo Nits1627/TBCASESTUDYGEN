@@ -21,130 +21,106 @@ st.image('logo.png', width=180)
 st.title('📚 AI-Powered Case Study Generator')
 st.markdown('Generate campaign-specific case studies with accurate, factual data and detailed storytelling.')
 
-# === Initialize Session State ===
-state_vars = ['snippets','raw_metrics','benchmarks','verified','recommendations','styles','selected_style','case_study']
+# === Session State ===
+state_vars = ['snippets','all_text','case_study','styles','style_choice']
 for var in state_vars:
     if var not in st.session_state:
-        st.session_state[var] = None if var in ['selected_style','case_study'] else {}
+        st.session_state[var] = None
 
 # === Utilities ===
 def search_campaign_articles(query, timeframe, num_results=5):
-    search_url = f"https://www.googleapis.com/customsearch/v1"
-    params = {
-        "key": GOOGLE_CSE_API_KEY,
-        "cx": GOOGLE_CSE_ENGINE_ID,
-        "q": f"{query} {timeframe}",
-        "num": num_results
-    }
+    url = "https://www.googleapis.com/customsearch/v1"
+    params = {"key": GOOGLE_CSE_API_KEY, "cx": GOOGLE_CSE_ENGINE_ID, "q": f"{query} {timeframe}", "num": num_results}
     try:
-        response = requests.get(search_url, params=params)
-        results = response.json()
-        links = [item["link"] for item in results.get("items", [])]
-        return links
-    except Exception:
+        res = requests.get(url, params=params)
+        items = res.json().get('items', [])
+        return [item['link'] for item in items]
+    except:
         return []
 
 def scrape_page_text(url):
     try:
-        res = requests.get(url, timeout=10)
-        soup = BeautifulSoup(res.text, 'html.parser')
-        for s in soup(['script', 'style', 'header', 'footer', 'noscript']):
-            s.decompose()
-        text = ' '.join(soup.stripped_strings)
-        return text[:5000]
-    except Exception:
-        return ""
-
-def extract_deep_case_study(text, client, campaign, brief, achievements, industry, campaign_dates):
-    prompt = f"""
-You are a senior strategist at a creative agency. Build a highly detailed, analytical, and in-depth case study for the following campaign:
-
-Client: {client}
-Campaign: {campaign}
-Industry: {industry}
-Timeframe: {campaign_dates}
-Brief: {brief}
-Achievements: {achievements}
-
-Use ONLY the data from below and structure your case study with the following 5 sections:
-1. Campaign Overview
-2. Strategic Approach & Execution
-3. Creative Innovation
-4. Measurable Success & Metrics (include real numeric metrics like reach, engagement, ROI, uplift, sales)
-5. Summary & Key Learnings
-
-Include verified quotes, accurate campaign numbers, references to marketing performance, and highlight how the campaign outperformed benchmarks.
-
-Content:
-{text}
-"""
-    return model.generate_content(prompt).text.strip()
+        r = requests.get(url, timeout=10)
+        soup = BeautifulSoup(r.text, 'html.parser')
+        for tag in soup(['script','style','header','footer','noscript']): tag.decompose()
+        return ' '.join(soup.stripped_strings)[:5000]
+    except:
+        return ''
 
 # === Input Form ===
 with st.form('analysis_form'):
     st.subheader('📋 Campaign Details')
     project_title = st.text_input('Project Title')
-    client_name = st.text_input('Client/Brand Name')
-    campaign_name = st.text_input('Campaign Name')
-    campaign_dates = st.text_input('Campaign Timeframe (e.g. April - June 2024)', help='Used to improve the accuracy of search queries for this campaign')
-    industry = st.selectbox('Industry',['Technology','Retail','Automotive','Financial Services','Healthcare','Food & Beverage','Fashion','Travel & Tourism','Entertainment','Real Estate','Education','Sports','Beauty & Personal Care','Other'])
+    client = st.text_input('Client/Brand Name')
+    campaign = st.text_input('Campaign Name')
+    timeframe = st.text_input('Campaign Timeframe (e.g. April - June 2024)', help='Refines web search to this period')
+    industry = st.selectbox('Industry', ['Technology','Retail','Automotive','Financial Services','Healthcare','Food & Beverage','Fashion','Travel & Tourism','Entertainment','Real Estate','Education','Sports','Beauty & Personal Care','Other'])
     brief = st.text_area('Campaign Brief', help='Summarize objectives and context')
     achievements = st.text_area('Key Achievements', help='Known wins or KPIs')
-    generate = st.form_submit_button('🚀 Generate Analysis')
+    submit = st.form_submit_button('🔍 Analyze Campaign')
 
-# === Analysis Pipeline ===
-if generate:
-    if not (client_name and campaign_name and campaign_dates):
-        st.error('Please fill in client, campaign, and campaign timeframe.')
+# === Fetch and Prepare Data ===
+if submit:
+    if not (client and campaign and timeframe):
+        st.error('Please fill in client, campaign name, and timeframe.')
     else:
-        st.info('🔍 Researching campaign performance...')
-        query = f"{client_name} {campaign_name} campaign results"
-        links = search_campaign_articles(query, campaign_dates, 7)
-        all_text = "\n\n".join([scrape_page_text(link) for link in links])
-        st.session_state.snippets = all_text
+        st.info('🔗 Fetching sources...')
+        links = search_campaign_articles(f"{client} {campaign} campaign results", timeframe, num_results=7)
+        st.write('Sources:', *links, sep='\n')
+        st.info('📖 Scraping content...')
+        text_blocks = [scrape_page_text(link) for link in links]
+        st.session_state.all_text = '\n\n'.join(text_blocks)
+        st.success('✅ Data ready for case study')
+        # Recommend styles
+        st.session_state.styles = ['Executive Summary','Data-Focused','Narrative-Driven','Technical Deep Dive']
+        st.session_state.style_choice = st.radio('Select Case Study Style', st.session_state.styles)
 
-        st.info('📊 Generating detailed case study...')
-        result = extract_deep_case_study(all_text, client_name, campaign_name, brief, achievements, industry, campaign_dates)
+# === Generate Case Study ===
+if st.session_state.style_choice:
+    if st.button('🚀 Generate Case Study'):
+        st.info('🛠 Building case study...')
+        prompt = f"""
+You are a senior strategist at Thought Blurb. Create an in-depth, minimum 700-word case study in the '{st.session_state.style_choice}' style for the campaign below. Include ONLY factual data scraped from the provided content, with real numbers, verified quotes, and precise metrics showing how the campaign impacted the product/service. Avoid any hypothetical or made-up figures.
+
+Client: {client}
+Campaign: {campaign}
+Industry: {industry}
+Timeframe: {timeframe}
+Brief: {brief}
+Achievements: {achievements}
+Style: {st.session_state.style_choice}
+
+Structure your case study into 5 sections:
+1. Campaign Overview
+2. Strategic Approach & Execution
+3. Creative Innovation
+4. Measurable Success & Metrics
+5. Summary & Key Learnings
+
+Ensure the 'Measurable Success & Metrics' section contains actual numeric results (reach, engagement rate, ROI, sales uplift) sourced from the scraped content.
+
+Content:
+{st.session_state.all_text}
+"""
+        result = model.generate_content(prompt).text.strip()
         st.session_state.case_study = result
 
-# === Display & Rewriting Option ===
+# === Display & Export ===
 if st.session_state.case_study:
     st.markdown('---')
     st.markdown('### 📄 Case Study Output')
     st.markdown(st.session_state.case_study, unsafe_allow_html=True)
-
-    # Reprompting box for user feedback and regeneration
-    st.markdown('---')
-    st.markdown('#### ✏️ Request Changes or Recommendations')
-    user_feedback = st.text_area('Enter any changes, additions, or recommendations you want for the case study:', key='reprompt_box')
-    if st.button('🔄 Regenerate Case Study with Changes'):
-        with st.spinner('Regenerating your revised case study...'):
-            revised_prompt = f"""
-Revise this case study to include the following user feedback: {user_feedback}
-Be extremely detailed, accurate, and include all real metrics, quotes, numbers, and campaign outcomes.
-
-Original Case Study:
-{st.session_state.case_study}
-"""
-            revised_result = model.generate_content(revised_prompt).text.strip()
-            st.session_state.case_study = revised_result
-
-    # PDF Export
+    # Export PDF
     html = f"""
-    <html><head><meta charset='utf-8'></head><body>
-    {markdown2.markdown(st.session_state.case_study)}
-    <footer>Generated on {datetime.now().strftime('%B %d, %Y')}</footer>
-    </body></html>
-    """
-    pdf_io = io.BytesIO()
-    pisa.CreatePDF(html, dest=pdf_io)
-    pdf_io.seek(0)
-    st.download_button('📥 Download PDF', data=pdf_io, file_name=f"{project_title.replace(' ','_')}.pdf", mime='application/pdf')
-
-    # Regeneration input
-    st.markdown('---')
-    st.subheader('♻️ Refine and Regenerate')
-    custom_prompt = st.text_area("Add or modify your instructions to regenerate the case study:", placeholder="e.g., Add market trends or client testimonials")
-    if st.button('♻️ Regenerate with Custom Prompt'):
-        custom = model.generate_content(f"Revise the following case study based on this instruction: '{custom_prompt}'\n\nOriginal:\n\n{st.session_state.case_study}").text.strip()
-        st.session_state.case_study = custom
+<html><body>{markdown2.markdown(st.session_state.case_study)}<footer>Generated on {datetime.now().strftime('%B %d, %Y')}</footer></body></html>
+"""
+    pdf = io.BytesIO()
+    pisa.CreatePDF(html, dest=pdf)
+    pdf.seek(0)
+    st.download_button('📥 Download PDF', pdf, file_name=f"{project_title.replace(' ','_')}.pdf", mime='application/pdf')
+    # Regeneration
+    feedback = st.text_area('Request changes or additions:', key='feedback')
+    if st.button('♻️ Regenerate'):
+        rev_prompt = f"Revise the case study below based on this feedback: {feedback}\n\nOriginal:\n{st.session_state.case_study}"
+        st.session_state.case_study = model.generate_content(rev_prompt).text.strip()
+        st.experimental_rerun()
