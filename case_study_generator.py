@@ -5,14 +5,15 @@ import io
 import requests
 from xhtml2pdf import pisa
 from datetime import datetime
+from bs4 import BeautifulSoup
 import time
 
 # === API Setup ===
 genai.configure(api_key=st.secrets['GEMINI_API_KEY'])
 model = genai.GenerativeModel('gemini-1.5-flash')
 
-SERPER_API_KEY = st.secrets['SERPER_API_KEY']
-SERPER_API_URL = 'https://google.serper.dev/search'
+GOOGLE_CSE_API_KEY = st.secrets['GOOGLE_CSE_API_KEY']
+GOOGLE_CSE_ENGINE_ID = st.secrets['GOOGLE_CSE_ENGINE_ID']
 
 # === Streamlit UI Setup ===
 st.set_page_config(page_title='AI Case Study Generator', layout='wide')
@@ -26,45 +27,57 @@ for var in state_vars:
     if var not in st.session_state:
         st.session_state[var] = None if var in ['selected_style','case_study'] else {}
 
-# === Core Utilities ===
-def fetch_comprehensive_campaign_data(query, num_results=10):
-    headers = {'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json'}
-    payload = {'q': query, 'num': num_results, 'type': 'search', 'engine': 'google'}
+# === Utilities ===
+def search_campaign_articles(query, num_results=5):
+    search_url = f"https://www.googleapis.com/customsearch/v1"
+    params = {
+        "key": GOOGLE_CSE_API_KEY,
+        "cx": GOOGLE_CSE_ENGINE_ID,
+        "q": query,
+        "num": num_results
+    }
     try:
-        res = requests.post(SERPER_API_URL, headers=headers, json=payload, timeout=20)
-        data = res.json()
-        snippets = []
-        
-        # Extract snippets from organic results
-        for r in data.get('organic',[]):
-            snippet = r.get('snippet','')
-            title = r.get('title','')
-            link = r.get('link','')
-            snippets.append(f"SOURCE: {title} ({link})\nCONTENT: {snippet}")
-            
-        # Also check for news results which often contain recent campaign data
-        for r in data.get('news',[]):
-            snippet = r.get('snippet','')
-            title = r.get('title','')
-            link = r.get('link','')
-            date = r.get('date','')
-            snippets.append(f"NEWS SOURCE: {title} ({date}) ({link})\nCONTENT: {snippet}")
-            
-        return "\n\n".join(snippets[:num_results])
+        response = requests.get(search_url, params=params)
+        results = response.json()
+        links = [item["link"] for item in results.get("items", [])]
+        return links
     except Exception as e:
-        return f'Error fetching data: {str(e)}'
+        return []
+
+def scrape_page_text(url):
+    try:
+        res = requests.get(url, timeout=10)
+        soup = BeautifulSoup(res.text, 'html.parser')
+        for s in soup(['script', 'style', 'header', 'footer', 'noscript']):
+            s.decompose()
+        text = ' '.join(soup.stripped_strings)
+        return text[:5000]
+    except Exception as e:
+        return ""
 
 def extract_before_after_metrics(text, client, campaign):
     prompt = f"""
-Extract detailed numeric BEFORE and AFTER metrics for {client}'s "{campaign}" campaign in JSON format: {{"MetricName":{{"before":val,"after":val,"percent_change":val,"unit":"unit"}},...}}
+You are an AI analyst.
 
-Analyze the text thoroughly to find all possible metrics. For each metric:
-1. Extract precise numeric values (before and after the campaign)
-2. Calculate the percent change
-3. Include the unit of measurement (%, $, users, etc.)
-4. Ensure values are specific to this exact campaign, not general company metrics
+Analyze the following content to extract before/after metrics for {client}'s "{campaign}" campaign.
 
-Text:\n{text[:3000]}
+Return a JSON like:
+{{
+  "MetricName": {{
+    "before": value,
+    "after": value,
+    "percent_change": "+x%",
+    "unit": "unit",
+    "timeframe": "e.g. Q1 vs Q2 2023",
+    "evidence": "Quoted source text"
+  }},
+  ...
+}}
+
+Only include metrics that are clearly supported by the quoted evidence.
+
+Content:
+{text}
 """
     return model.generate_content(prompt).text.strip()
 
@@ -72,9 +85,10 @@ def fetch_industry_benchmarks(industry, metrics):
     output = {}
     for m in metrics:
         query = f"{industry} industry average {m} benchmark 2024 statistics"
-        snippets = fetch_comprehensive_campaign_data(query, 10)
+        links = search_campaign_articles(query, 3)
+        text = "\n".join([scrape_page_text(url) for url in links])
         prompt = f"""Extract detailed {m} benchmarks for {industry} industry from the text below.
-        
+
 Provide in JSON format with these fields:
 - average: The industry average value
 - top_performers: Value for top 10% in industry
@@ -83,7 +97,7 @@ Provide in JSON format with these fields:
 - source: Likely source of this data
 - year: Most recent year this data represents
 
-Text:\n{snippets[:2500]}
+Text:\n{text[:2500]}
 """
         output[m] = model.generate_content(prompt).text.strip()
         time.sleep(0.5)
@@ -99,7 +113,8 @@ def verify_campaign_facts(client, campaign, metrics_json):
     ]
     combined = ''
     for q in queries:
-        combined += fetch_comprehensive_campaign_data(q,6) + "\n"
+        links = search_campaign_articles(q, 2)
+        combined += "\n".join([scrape_page_text(url) for url in links]) + "\n"
         time.sleep(0.5)
     prompt = f"""
 Verify these metrics for {client}'s "{campaign}" campaign with extreme precision.
@@ -150,12 +165,14 @@ if generate:
         st.error('Please fill in client, campaign, and select at least one metric.')
     else:
         st.info('🔍 Researching campaign performance...')
-        snippets = fetch_comprehensive_campaign_data(f"{client_name} {campaign_name} campaign results official",12)
-        st.session_state.snippets = snippets
+        query = f"{client_name} {campaign_name} campaign results"
+        links = search_campaign_articles(query, 5)
+        all_text = "\n\n".join([scrape_page_text(link) for link in links])
+        st.session_state.snippets = all_text
 
         if deep_analysis:
             st.info('📊 Extracting before/after metrics...')
-            raw = extract_before_after_metrics(snippets, client_name, campaign_name)
+            raw = extract_before_after_metrics(all_text, client_name, campaign_name)
             st.session_state.raw_metrics = raw
 
         if include_benchmarks:
@@ -210,7 +227,6 @@ if st.session_state.case_study:
     st.markdown('### 📄 Case Study Output')
     st.markdown(st.session_state.case_study, unsafe_allow_html=True)
 
-    # PDF Export
     html = f"""
     <html><head><meta charset='utf-8'></head><body>
     {markdown2.markdown(st.session_state.case_study)}
