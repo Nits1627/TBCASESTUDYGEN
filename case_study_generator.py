@@ -19,7 +19,7 @@ GOOGLE_CSE_ENGINE_ID = st.secrets['GOOGLE_CSE_ENGINE_ID']
 st.set_page_config(page_title='AI Case Study Generator', layout='wide')
 st.image('logo.png', width=180)
 st.title('📚 AI-Powered Case Study Generator')
-st.markdown('Generate campaign-specific case studies with accurate numeric metrics and factual verification.')
+st.markdown('Generate campaign-specific case studies as Thought Blurb with accurate, optimistic, data-backed narratives.')
 
 # === Initialize Session State ===
 state_vars = ['snippets','raw_metrics','benchmarks','verified','recommendations','styles','selected_style','case_study']
@@ -57,11 +57,12 @@ def scrape_page_text(url):
 
 def extract_before_after_metrics(text, client, campaign):
     prompt = f"""
-You are an AI analyst.
+You are a data analyst working for the creative agency Thought Blurb.
+Analyze the following content to extract the strongest, verifiable before/after metrics for {client}'s "{campaign}" campaign.
 
-Analyze the following content to extract before/after metrics for {client}'s "{campaign}" campaign.
+Provide only metrics that can support positive impact.
 
-Return a JSON like:
+Return in JSON:
 {{
   "MetricName": {{
     "before": value,
@@ -74,9 +75,7 @@ Return a JSON like:
   ...
 }}
 
-Only include metrics that are clearly supported by the quoted evidence.
-
-Content:
+Text:
 {text}
 """
     return model.generate_content(prompt).text.strip()
@@ -89,13 +88,13 @@ def fetch_industry_benchmarks(industry, metrics):
         text = "\n".join([scrape_page_text(url) for url in links])
         prompt = f"""Extract detailed {m} benchmarks for {industry} industry from the text below.
 
-Provide in JSON format with these fields:
-- average: The industry average value
-- top_performers: Value for top 10% in industry
-- range: Typical range (min-max)
-- unit: Unit of measurement
-- source: Likely source of this data
-- year: Most recent year this data represents
+Provide in JSON format:
+- average
+- top_performers
+- range (min-max)
+- unit
+- source
+- year
 
 Text:\n{text[:2500]}
 """
@@ -117,25 +116,26 @@ def verify_campaign_facts(client, campaign, metrics_json):
         combined += "\n".join([scrape_page_text(url) for url in links]) + "\n"
         time.sleep(0.5)
     prompt = f"""
-Verify these metrics for {client}'s "{campaign}" campaign with extreme precision.
+As a validation analyst at Thought Blurb, verify the following performance metrics of the "{campaign}" campaign for {client}.
 
-Metrics:\n{metrics_json}\n
-Sources:\n{combined[:3000]}\n
-Provide a detailed JSON with:
-1. Each metric mapped to:
-   - verified: true/false
-   - credibility_score: 0-100
-   - confidence_level: "high", "medium", or "low"
-   - supporting_evidence: Direct quotes or references from sources
-   - contradicting_evidence: Any conflicting information found
-   - suggested_adjustment: If metric seems inaccurate, suggest corrected value
+Input Metrics:
+{metrics_json}
 
-2. Overall assessment:
-   - overall_reliability: 0-100 score
-   - potential_biases: Any marketing exaggerations detected
-   - missing_context: Important context that might be missing
+Sources:
+{combined[:3000]}
 
-Be extremely critical and thorough in your verification.
+Return verified metrics with:
+- verified: true/false
+- credibility_score: 0-100
+- confidence_level
+- supporting_evidence
+- contradicting_evidence
+- suggested_adjustment
+
+Also include:
+- overall_reliability
+- potential_biases
+- missing_context
 """
     return model.generate_content(prompt).text.strip()
 
@@ -148,8 +148,8 @@ with st.form('analysis_form'):
     industry = st.selectbox('Industry',['Technology','Retail','Automotive','Financial Services',
                                         'Healthcare','Food & Beverage','Fashion','Travel & Tourism',
                                         'Entertainment','Real Estate','Education','Sports','Beauty & Personal Care','Other'])
-    brief = st.text_area('Campaign Brief', help='Summarize objectives and context')
-    achievements = st.text_area('Key Achievements', help='Known wins or KPIs')
+    brief = st.text_area('Campaign Brief')
+    achievements = st.text_area('Key Achievements')
     target_metrics = st.multiselect('Select Metrics to Analyze',['Sales Revenue','Market Share','Brand Awareness',
                                                           'Customer Acquisition','Website Traffic','Engagement Rate',
                                                           'Conversion Rate','ROI/ROAS','Social Media Growth','Lead Generation','App Downloads','Store Visits'])
@@ -195,28 +195,28 @@ if st.session_state.selected_style:
     if st.button('🚀 Generate Case Study'):
         with st.spinner('🛠️ Building your case study...'):
             prompt = f"""
-Create a highly detailed, data-driven {st.session_state.selected_style} case study for {client_name}'s "{campaign_name}" campaign in {industry}.
+You are a senior strategist at Thought Blurb.
+Write a comprehensive, data-backed, and optimistic {st.session_state.selected_style} case study for {client_name}'s "{campaign_name}" campaign in the {industry} sector.
 
-Use this information:
-- Brief: {brief}
+Incorporate:
+- Project Brief: {brief}
 - Achievements: {achievements}
-- Metrics: {st.session_state.raw_metrics}
+- Metrics JSON: {st.session_state.raw_metrics}
 - Benchmarks: {st.session_state.benchmarks}
-- Fact Verification: {st.session_state.verified}
+- Verified Facts: {st.session_state.verified}
+
+Structure the output with these sections:
+1. Campaign Overview
+2. Strategy & Execution
+3. Performance Metrics & Business Impact (with real figures)
+4. Creative Innovation Highlights
+5. Key Learnings & Future Recommendations
 
 Requirements:
-1. Focus EXCLUSIVELY on this specific campaign with accurate, verified metrics
-2. Include precise numeric data with proper units (%, $, etc.) and time periods
-3. Compare campaign performance against industry benchmarks with specific percentages
-4. Analyze ROI and cost-effectiveness with concrete numbers
-5. Include a "Methodology" section explaining how results were measured
-6. Add a "Key Learnings" section with actionable insights
-7. Create data visualizations described in markdown (tables, charts)
-8. Cite specific timeframes for all metrics (e.g., "In Q2 2023..." not "Recently...")
-9. Maintain factual accuracy - only include claims supported by the verified data
-10. Tailor the content specifically to {industry} industry standards and expectations
-
-Format as professional markdown with clear sections, subsections, and tables for numeric data.
+- Reflect Thought Blurb's involvement and success
+- Use exact figures, percentages, and timeframes (no vague terms)
+- Be formatted in formal markdown (titles, tables, bullets)
+- Add clear, client-ready commentary on performance improvements and ROI
 """
             result = model.generate_content(prompt).text.strip()
             st.session_state.case_study = result
