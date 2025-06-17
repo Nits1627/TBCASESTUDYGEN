@@ -118,6 +118,6 @@ if st.session_state.case_study:
     pdf_io.seek(0)
     st.download_button('📥 Download PDF', pdf_io, file_name=f'{project_title.replace(" ","_")}.pdf', mime='application/pdf')
     feedback = st.text_area('Request further changes:', key='feedback')
-        if st.button('♻️ Regenerate with Feedback'):
+    if st.button('♻️ Regenerate with Feedback'):
         rev = f"Revise the case study below based on this feedback: {feedback}\n\nOriginal:\n{st.session_state.case_study}"
         st.session_state.case_study = model.generate_content(rev).text.strip()
