@@ -41,7 +41,7 @@ def search_campaign_articles(query, timeframe, num_results=5):
         results = response.json()
         links = [item["link"] for item in results.get("items", [])]
         return links
-    except Exception as e:
+    except Exception:
         return []
 
 def scrape_page_text(url):
@@ -52,16 +52,17 @@ def scrape_page_text(url):
             s.decompose()
         text = ' '.join(soup.stripped_strings)
         return text[:5000]
-    except Exception as e:
+    except Exception:
         return ""
 
-def extract_deep_case_study(text, client, campaign, brief, achievements, industry):
+def extract_deep_case_study(text, client, campaign, brief, achievements, industry, campaign_dates):
     prompt = f"""
 You are a senior strategist at a creative agency. Build a highly detailed, analytical, and in-depth case study for the following campaign:
 
 Client: {client}
 Campaign: {campaign}
 Industry: {industry}
+Timeframe: {campaign_dates}
 Brief: {brief}
 Achievements: {achievements}
 
@@ -69,10 +70,10 @@ Use ONLY the data from below and structure your case study with the following 5 
 1. Campaign Overview
 2. Strategic Approach & Execution
 3. Creative Innovation
-4. Key Learnings & Recommendations
-5. Summary & Conclusion
+4. Measurable Success & Metrics (include real numeric metrics like reach, engagement, ROI, uplift, sales)
+5. Summary & Key Learnings
 
-Include verified quotes, real campaign insights, and reference accurate timelines and events.
+Include verified quotes, accurate campaign numbers, references to marketing performance, and highlight how the campaign outperformed benchmarks.
 
 Content:
 {text}
@@ -103,7 +104,7 @@ if generate:
         st.session_state.snippets = all_text
 
         st.info('📊 Generating detailed case study...')
-        result = extract_deep_case_study(all_text, client_name, campaign_name, brief, achievements, industry)
+        result = extract_deep_case_study(all_text, client_name, campaign_name, brief, achievements, industry, campaign_dates)
         st.session_state.case_study = result
 
 # === Display & Rewriting Option ===
@@ -119,29 +120,11 @@ if st.session_state.case_study:
     if st.button('🔄 Regenerate Case Study with Changes'):
         with st.spinner('Regenerating your revised case study...'):
             revised_prompt = f"""
-Create a highly detailed, data-driven {st.session_state.selected_style} case study for {client_name}'s "{campaign_name}" campaign in {industry}.
+Revise this case study to include the following user feedback: {user_feedback}
+Be extremely detailed, accurate, and include all real metrics, quotes, numbers, and campaign outcomes.
 
-Use this information:
-- Campaign Timeframe: {campaign_dates}
-- Brief: {brief}
-- Achievements: {achievements}
-- Metrics: {st.session_state.raw_metrics}
-- Benchmarks: {st.session_state.benchmarks}
-- Fact Verification: {st.session_state.verified}
-- User Requested Changes: {user_feedback}
-
-Requirements:
-1. Focus EXCLUSIVELY on this specific campaign with accurate, verified metrics
-2. Include precise numeric data with proper units (%, $, etc.) and time periods
-3. Compare campaign performance against industry benchmarks with specific percentages
-4. Analyze ROI and cost-effectiveness with concrete numbers
-5. Include a "Methodology" section explaining how results were measured
-6. Add a "Key Learnings" section with actionable insights
-7. Create data visualizations described in markdown (tables, charts)
-8. Cite specific timeframes for all metrics (e.g., "In Q2 2023..." not "Recently...")
-9. Maintain factual accuracy - only include claims supported by the verified data
-10. Tailor the content specifically to {industry} industry standards and expectations
-Format as professional markdown with clear sections, subsections, and tables for numeric data.
+Original Case Study:
+{st.session_state.case_study}
 """
             revised_result = model.generate_content(revised_prompt).text.strip()
             st.session_state.case_study = revised_result
