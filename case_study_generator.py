@@ -22,10 +22,10 @@ st.title('📚 AI-Powered Case Study Generator')
 st.markdown('Generate campaign-specific case studies as Thought Blurb with accurate, optimistic, data-backed narratives.')
 
 # === Initialize Session State ===
-state_vars = ['snippets','raw_metrics','benchmarks','verified','recommendations','styles','selected_style','case_study']
+state_vars = ['snippets','raw_metrics','benchmarks','verified','recommendations','styles','selected_style','case_study','custom_reprompt']
 for var in state_vars:
     if var not in st.session_state:
-        st.session_state[var] = None if var in ['selected_style','case_study'] else {}
+        st.session_state[var] = None if var in ['selected_style','case_study','custom_reprompt'] else {}
 
 # === Utilities ===
 def search_campaign_articles(query, num_results=5):
@@ -196,7 +196,7 @@ if st.session_state.selected_style:
         with st.spinner('🛠️ Building your case study...'):
             prompt = f"""
 You are a senior strategist at Thought Blurb.
-Write a comprehensive, data-backed, and optimistic {st.session_state.selected_style} case study for {client_name}'s "{campaign_name}" campaign in the {industry} sector.
+Write a comprehensive, deeply detailed, data-backed, optimistic {st.session_state.selected_style} case study for {client_name}'s "{campaign_name}" campaign in the {industry} sector.
 
 Incorporate:
 - Project Brief: {brief}
@@ -205,18 +205,18 @@ Incorporate:
 - Benchmarks: {st.session_state.benchmarks}
 - Verified Facts: {st.session_state.verified}
 
-Structure the output with these sections:
-1. Campaign Overview
-2. Strategy & Execution
-3. Performance Metrics & Business Impact (with real figures)
-4. Creative Innovation Highlights
-5. Key Learnings & Future Recommendations
+Structure:
+1. Campaign Overview (context, objectives, background)
+2. Strategic Approach & Execution (media strategy, messaging, targeting)
+3. Creative Innovation (what we did differently and why it worked)
+4. Data-Backed Learnings & Recommendations
+5. Summary & Conclusion
 
-Requirements:
-- Reflect Thought Blurb's involvement and success
-- Use exact figures, percentages, and timeframes (no vague terms)
-- Be formatted in formal markdown (titles, tables, bullets)
-- Add clear, client-ready commentary on performance improvements and ROI
+Must Include:
+- Exact numeric data, attributed sources, and optimistic tone
+- Language that shows Thought Blurb led the success
+- Clear insights, subheadings, and markdown tables
+- Avoid passive tone, use confident, client-ready phrasing
 """
             result = model.generate_content(prompt).text.strip()
             st.session_state.case_study = result
@@ -237,3 +237,33 @@ if st.session_state.case_study:
     pisa.CreatePDF(html, dest=pdf_io)
     pdf_io.seek(0)
     st.download_button('📥 Download PDF', data=pdf_io, file_name=f"{project_title.replace(' ','_')}.pdf", mime='application/pdf')
+
+    st.markdown('---')
+    st.subheader("🔁 Want to regenerate with a new prompt?")
+    st.session_state.custom_reprompt = st.text_area("Add or modify your request to refine the case study:", value="Make it more detailed and results-driven with strong performance breakdowns")
+    if st.button("♻️ Regenerate with Custom Prompt"):
+        with st.spinner("Re-generating based on your updated request..."):
+            custom_prompt = f"""
+You are a senior strategist at Thought Blurb.
+Generate an advanced, refined, highly detailed case study for {client_name}'s "{campaign_name}" campaign.
+
+Custom Request:
+{st.session_state.custom_reprompt}
+
+Inputs:
+- Project Brief: {brief}
+- Achievements: {achievements}
+- Metrics: {st.session_state.raw_metrics}
+- Benchmarks: {st.session_state.benchmarks}
+- Verified Insights: {st.session_state.verified}
+
+Ensure it includes:
+- Detailed campaign sections
+- Performance commentary
+- Creative showcase
+- Strong, client-ready tone
+- Quantified improvements and ROI discussion
+"""
+            updated_result = model.generate_content(custom_prompt).text.strip()
+            st.session_state.case_study = updated_result
+            st.rerun()
