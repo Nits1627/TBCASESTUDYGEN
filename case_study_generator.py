@@ -85,8 +85,8 @@ with st.form('analysis_form'):
     project_title = st.text_input('Project Title')
     client_name = st.text_input('Client/Brand Name')
     campaign_name = st.text_input('Campaign Name')
+    campaign_dates = st.text_input('Campaign Timeframe (e.g. April - June 2024)', help='Used to improve the accuracy of search queries for this campaign')
     industry = st.selectbox('Industry',['Technology','Retail','Automotive','Financial Services','Healthcare','Food & Beverage','Fashion','Travel & Tourism','Entertainment','Real Estate','Education','Sports','Beauty & Personal Care','Other'])
-    campaign_dates = st.text_input('Campaign Timeframe (e.g., April to June 2024)')
     brief = st.text_area('Campaign Brief', help='Summarize objectives and context')
     achievements = st.text_area('Key Achievements', help='Known wins or KPIs')
     generate = st.form_submit_button('🚀 Generate Analysis')
@@ -112,6 +112,41 @@ if st.session_state.case_study:
     st.markdown('### 📄 Case Study Output')
     st.markdown(st.session_state.case_study, unsafe_allow_html=True)
 
+    # Reprompting box for user feedback and regeneration
+    st.markdown('---')
+    st.markdown('#### ✏️ Request Changes or Recommendations')
+    user_feedback = st.text_area('Enter any changes, additions, or recommendations you want for the case study:', key='reprompt_box')
+    if st.button('🔄 Regenerate Case Study with Changes'):
+        with st.spinner('Regenerating your revised case study...'):
+            revised_prompt = f"""
+Create a highly detailed, data-driven {st.session_state.selected_style} case study for {client_name}'s "{campaign_name}" campaign in {industry}.
+
+Use this information:
+- Campaign Timeframe: {campaign_dates}
+- Brief: {brief}
+- Achievements: {achievements}
+- Metrics: {st.session_state.raw_metrics}
+- Benchmarks: {st.session_state.benchmarks}
+- Fact Verification: {st.session_state.verified}
+- User Requested Changes: {user_feedback}
+
+Requirements:
+1. Focus EXCLUSIVELY on this specific campaign with accurate, verified metrics
+2. Include precise numeric data with proper units (%, $, etc.) and time periods
+3. Compare campaign performance against industry benchmarks with specific percentages
+4. Analyze ROI and cost-effectiveness with concrete numbers
+5. Include a "Methodology" section explaining how results were measured
+6. Add a "Key Learnings" section with actionable insights
+7. Create data visualizations described in markdown (tables, charts)
+8. Cite specific timeframes for all metrics (e.g., "In Q2 2023..." not "Recently...")
+9. Maintain factual accuracy - only include claims supported by the verified data
+10. Tailor the content specifically to {industry} industry standards and expectations
+Format as professional markdown with clear sections, subsections, and tables for numeric data.
+"""
+            revised_result = model.generate_content(revised_prompt).text.strip()
+            st.session_state.case_study = revised_result
+
+    # PDF Export
     html = f"""
     <html><head><meta charset='utf-8'></head><body>
     {markdown2.markdown(st.session_state.case_study)}
